@@ -16,3 +16,22 @@ class GroupResponse(BaseModel):
     name: str
     description: str | None = None
     role: str
+
+
+class GroupMemberResponse(BaseModel):
+    id: int
+    email: str
+    first_name: str
+    last_name: str
+    role: str
+
+
+class GroupAvailabilityResponse(BaseModel):
+    id: int
+    user_id: int
+    email: str
+    first_name: str
+    last_name: str
+    day_of_week: int
+    start_time: str
+    end_time: str

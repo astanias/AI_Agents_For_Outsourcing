@@ -76,6 +76,82 @@ def _create_meeting(client, *, title: str, start_time: str, end_time: str, locat
     assert response.status_code == 303, response.text
 
 
+def _seed_meeting(
+    *,
+    organizer_email: str,
+    title: str,
+    attendee_statuses: list[tuple[str, str]],
+    start_time: str = "2030-02-08T09:00:00Z",
+    end_time: str = "2030-02-08T10:00:00Z",
+) -> None:
+    db = SessionLocal()
+    try:
+        organizer_id = int(
+            db.execute(
+                text("SELECT id FROM users WHERE email = :email"),
+                {"email": organizer_email},
+            ).scalar_one()
+        )
+        calendar_id = int(
+            db.execute(
+                text(
+                    """
+                    INSERT INTO calendars (name, owner_type, owner_id)
+                    VALUES (:name, 'user', :owner_id)
+                    RETURNING id
+                    """
+                ),
+                {"name": f"{organizer_email} calendar", "owner_id": organizer_id},
+            ).scalar_one()
+        )
+        meeting_id = int(
+            db.execute(
+                text(
+                    """
+                    INSERT INTO meetings (calendar_id, title, start_time, end_time, status, created_by)
+                    VALUES (:calendar_id, :title, :start_time, :end_time, 'confirmed', :created_by)
+                    RETURNING id
+                    """
+                ),
+                {
+                    "calendar_id": calendar_id,
+                    "title": title,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "created_by": organizer_id,
+                },
+            ).scalar_one()
+        )
+        db.execute(
+            text(
+                """
+                INSERT INTO meeting_attendees (meeting_id, user_id, status)
+                VALUES (:meeting_id, :user_id, 'accepted')
+                """
+            ),
+            {"meeting_id": meeting_id, "user_id": organizer_id},
+        )
+        for attendee_email, attendee_status in attendee_statuses:
+            attendee_id = int(
+                db.execute(
+                    text("SELECT id FROM users WHERE email = :email"),
+                    {"email": attendee_email},
+                ).scalar_one()
+            )
+            db.execute(
+                text(
+                    """
+                    INSERT INTO meeting_attendees (meeting_id, user_id, status)
+                    VALUES (:meeting_id, :user_id, :status)
+                    """
+                ),
+                {"meeting_id": meeting_id, "user_id": attendee_id, "status": attendee_status},
+            )
+        db.commit()
+    finally:
+        db.close()
+
+
 def test_calendar_page_renders_monthly_grid_and_modal_markup(client, monkeypatch):
     _register_user(client)
     _web_login(client)
@@ -105,6 +181,8 @@ def test_calendar_page_renders_monthly_grid_and_modal_markup(client, monkeypatch
     assert "data-calendar-open" in response.text
     assert "data-calendar-modal" in response.text
     assert "data-calendar-edit-toggle" in response.text
+    assert "calendar-mobile-view" in response.text
+    assert "calendar-mobile-day-2030-01-08" in response.text
     assert "data-warning-severity=\"critical\"" in response.text
     assert "Campus Center" in response.text
 
@@ -119,6 +197,57 @@ def test_calendar_page_shows_empty_month_state(client, monkeypatch):
     assert response.status_code == 200, response.text
     assert "No meetings scheduled" in response.text
     assert "This month is open." in response.text
+
+
+def test_calendar_and_meetings_pages_scope_meeting_visibility(client, monkeypatch):
+    _register_user(client, email="owner@example.com")
+    _register_user(client, email="attendee@example.com")
+    _register_user(client, email="outsider@example.com")
+    monkeypatch.setattr("app.web.routes.get_travel_warning_service", lambda: CalendarTravelWarningService())
+
+    _seed_meeting(
+        organizer_email="owner@example.com",
+        title="Owner Private Meeting",
+        attendee_statuses=[],
+    )
+    _seed_meeting(
+        organizer_email="owner@example.com",
+        title="Pending Invite Meeting",
+        attendee_statuses=[("attendee@example.com", "invited")],
+    )
+    _seed_meeting(
+        organizer_email="owner@example.com",
+        title="Accepted Invite Meeting",
+        attendee_statuses=[("attendee@example.com", "accepted")],
+    )
+    _seed_meeting(
+        organizer_email="owner@example.com",
+        title="Maybe Invite Meeting",
+        attendee_statuses=[("attendee@example.com", "maybe")],
+    )
+    _seed_meeting(
+        organizer_email="owner@example.com",
+        title="Declined Invite Meeting",
+        attendee_statuses=[("attendee@example.com", "declined")],
+    )
+
+    _web_login(client, email="attendee@example.com")
+
+    calendar_response = client.get("/calendar?month=2030-02")
+    assert calendar_response.status_code == 200, calendar_response.text
+    assert "Accepted Invite Meeting" in calendar_response.text
+    assert "Maybe Invite Meeting" in calendar_response.text
+    assert "Pending Invite Meeting" not in calendar_response.text
+    assert "Declined Invite Meeting" not in calendar_response.text
+    assert "Owner Private Meeting" not in calendar_response.text
+
+    meetings_response = client.get("/meetings?day=2030-02-08")
+    assert meetings_response.status_code == 200, meetings_response.text
+    assert "Accepted Invite Meeting" in meetings_response.text
+    assert "Maybe Invite Meeting" in meetings_response.text
+    assert "Pending Invite Meeting" in meetings_response.text
+    assert "Declined Invite Meeting" not in meetings_response.text
+    assert "Owner Private Meeting" not in meetings_response.text
 
 
 def test_calendar_modal_edit_route_updates_meeting_and_resets_attendees(client, monkeypatch):

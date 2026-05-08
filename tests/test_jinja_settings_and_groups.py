@@ -303,15 +303,18 @@ def test_settings_and_availability_share_same_preference_data(client):
 
     settings_response = client.get("/settings")
     assert settings_response.status_code == 200, settings_response.text
-    assert "Monday" in settings_response.text
-    assert "Wednesday" in settings_response.text
-    assert "09:00" in settings_response.text
-    assert "11:00" in settings_response.text
+    assert "data-availability-calendar-root" in settings_response.text
+    assert "16 cells selected" in settings_response.text
+    assert "Mon" in settings_response.text
+    assert "Wed" in settings_response.text
+    assert "9:00 AM" in settings_response.text
 
     availability_response = client.get("/availability")
     assert availability_response.status_code == 200, availability_response.text
-    assert "Monday" in availability_response.text
-    assert "Wednesday" in availability_response.text
+    assert "data-availability-calendar-root" in availability_response.text
+    assert "16 cells selected" in availability_response.text
+    assert "Mon" in availability_response.text
+    assert "Wed" in availability_response.text
 
     db = SessionLocal()
     try:
@@ -545,9 +548,30 @@ def test_group_detail_shows_roster_group_calendar_and_member_availability_insigh
     assert "Roster" in response.text
     assert "Group Calendar" in response.text
     assert "Member Insights" in response.text
+    assert "Team Planning" in response.text
+    assert "data-group-meeting-planner-root" in response.text
     assert "Member Demo Review" in response.text
     assert "Weekly Availability" in response.text
     assert "group-availability-grid" in response.text
     assert "Mon" in response.text
     assert "Wed" in response.text
     assert "member@example.com" in response.text
+
+
+def test_group_meeting_planner_is_manager_only(client):
+    _register_user(client, email="owner@example.com")
+    _register_user(client, email="member@example.com")
+
+    group_id = _seed_group(
+        owner_email="owner@example.com",
+        name="Planner Permissions Team",
+        extra_members=[("member@example.com", "member")],
+    )
+
+    _web_login(client, email="member@example.com")
+    member_response = client.get(f"/groups/{group_id}")
+
+    assert member_response.status_code == 200, member_response.text
+    assert "Planner Permissions Team" in member_response.text
+    assert "data-group-meeting-planner-root" not in member_response.text
+    assert "Team Planning" not in member_response.text

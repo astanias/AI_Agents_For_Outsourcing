@@ -1,8 +1,8 @@
 <header class="app-header">
-  <div class="app-header-inner" style="flex-wrap: wrap; gap: 0;">
+  <div class="app-header-inner">
 
     <!-- Top row: logo + actions -->
-    <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; padding-bottom: 0.25rem;">
+    <div class="app-header-toprow">
       <a class="app-header-logo" href="{{ url_for('web_dashboard') }}">
         <span class="app-header-logo-mark" aria-hidden="true">
           <img
@@ -66,13 +66,14 @@
         </a>
 
         <form method="POST" action="{{ url_for('web_logout') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
           <button class="btn btn-primary btn-inline" type="submit">Log out</button>
         </form>
       </div>
     </div>
 
     <!-- Bottom row: nav links -->
-    <nav class="app-header-nav" aria-label="Primary" style="width: 100%; border-top: 1px solid var(--border, #dbe4f0); padding-top: 0.25rem;">
+    <nav class="app-header-nav" aria-label="Primary">
       <a class="app-header-nav-link{% if active_page == 'dashboard' %} is-active{% endif %}" href="{{ url_for('web_dashboard') }}">Dashboard</a>
       <a class="app-header-nav-link{% if active_page == 'meeting_scheduler' %} is-active{% endif %}" href="{{ url_for('web_meetings') }}">Scheduler</a>
       <a class="app-header-nav-link{% if active_page == 'meetings_overview' %} is-active{% endif %}" href="{{ url_for('web_meetings_overview') }}">Meetings</a>

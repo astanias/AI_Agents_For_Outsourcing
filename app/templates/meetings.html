@@ -46,6 +46,7 @@
         </div>
 
         <form method="POST" action="{{ url_for('web_meetings_create') }}" class="meeting-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
           <input type="hidden" name="q" value="{{ q }}" />
           <input type="hidden" name="status" value="{{ status }}" />
           <input type="hidden" name="mine" value="{% if mine %}1{% endif %}" />

@@ -23,12 +23,19 @@ from app.core.config import settings
 from app.core.logging import configure_logging
 from app.db.bootstrap import ensure_runtime_schema
 from app.models import User
-from app.schemas.groups import CreateGroupRequest, GroupResponse, JoinGroupRequest
+from app.schemas.groups import (
+    CreateGroupRequest,
+    GroupAvailabilityResponse,
+    GroupMemberResponse,
+    GroupResponse,
+    JoinGroupRequest,
+)
 from app.services.notifications import start_notification_scheduler, stop_notification_scheduler
 from app.web.routes import router as web_router
 
 
 groups_router = APIRouter(prefix="/groups", tags=["groups"])
+api_groups_router = APIRouter(prefix="/api/groups", tags=["groups"])
 
 
 configure_logging(settings.log_level)
@@ -36,18 +43,23 @@ logger = logging.getLogger("app")
 
 
 def _allowed_origins() -> list[str]:
-    origins = {
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5174",
-    }
+    origins: set[str] = set()
+    if not settings.is_production:
+        origins.update(
+            {
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "http://localhost:5174",
+                "http://127.0.0.1:5174",
+            }
+        )
     if settings.frontend_origin:
         origins.add(settings.frontend_origin)
     return sorted(origins)
 
 
 def create_app() -> FastAPI:
+    settings.validate_runtime()
     api = FastAPI(title="AI Agents API")
 
     @api.on_event("startup")
@@ -118,6 +130,7 @@ def create_app() -> FastAPI:
     api.include_router(assistant_router)
     api.include_router(auth_router)
     api.include_router(recommendations_router)
+    api.include_router(api_groups_router)
     api.include_router(groups_router)
     api.include_router(availability_router)
     api.include_router(calendar_router)
@@ -126,6 +139,7 @@ def create_app() -> FastAPI:
     return api
 
 
+@api_groups_router.get("/")
 @groups_router.get("/")
 def get_user_groups(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Fetch all groups the current logged-in user belongs to."""
@@ -141,6 +155,115 @@ def get_user_groups(current_user: User = Depends(get_current_user), db: Session 
 
     result = db.execute(query, {"user_id": current_user.id}).mappings().all()
     return [dict(row) for row in result]
+
+
+def _require_group_membership(db: Session, *, user_id: int, group_id: int) -> str:
+    membership = db.execute(
+        text(
+            """
+            SELECT role
+            FROM group_memberships
+            WHERE user_id = :user_id AND group_id = :group_id
+            """
+        ),
+        {"user_id": user_id, "group_id": group_id},
+    ).mappings().one_or_none()
+
+    if membership is None:
+        raise HTTPException(status_code=404, detail="Group not found")
+    return str(membership["role"])
+
+
+@api_groups_router.get("/{group_id}", response_model=GroupResponse)
+def get_group_detail(
+    group_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    role = _require_group_membership(db, user_id=current_user.id, group_id=group_id)
+
+    group = db.execute(
+        text("SELECT id, name, description FROM groups WHERE id = :group_id"),
+        {"group_id": group_id},
+    ).mappings().one_or_none()
+    if group is None:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    return GroupResponse(
+        id=group["id"],
+        name=group["name"],
+        description=group["description"],
+        role=role,
+    )
+
+
+@api_groups_router.get("/{group_id}/members", response_model=list[GroupMemberResponse])
+def get_group_members(
+    group_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_group_membership(db, user_id=current_user.id, group_id=group_id)
+
+    rows = db.execute(
+        text(
+            """
+            SELECT
+                u.id,
+                u.email,
+                u.first_name,
+                u.last_name,
+                gm.role
+            FROM group_memberships gm
+            JOIN users u ON u.id = gm.user_id
+            WHERE gm.group_id = :group_id
+            ORDER BY
+                CASE gm.role
+                    WHEN 'owner' THEN 0
+                    WHEN 'admin' THEN 1
+                    ELSE 2
+                END,
+                u.email ASC
+            """
+        ),
+        {"group_id": group_id},
+    ).mappings().all()
+
+    return [GroupMemberResponse(**dict(row)) for row in rows]
+
+
+@api_groups_router.get("/{group_id}/availability", response_model=list[GroupAvailabilityResponse])
+def get_group_member_availability(
+    group_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_group_membership(db, user_id=current_user.id, group_id=group_id)
+
+    rows = db.execute(
+        text(
+            """
+            SELECT
+                tsp.id,
+                tsp.user_id,
+                u.email,
+                u.first_name,
+                u.last_name,
+                tsp.day_of_week,
+                tsp.start_time::text AS start_time,
+                tsp.end_time::text AS end_time
+            FROM time_slot_preferences tsp
+            JOIN group_memberships gm
+              ON gm.user_id = tsp.user_id
+             AND gm.group_id = :group_id
+            JOIN users u ON u.id = tsp.user_id
+            ORDER BY tsp.day_of_week ASC, tsp.start_time ASC, u.email ASC
+            """
+        ),
+        {"group_id": group_id},
+    ).mappings().all()
+
+    return [GroupAvailabilityResponse(**dict(row)) for row in rows]
 
 
 def _group_id_from_invite_code(invite_code: str) -> int | None:
@@ -160,6 +283,7 @@ def _group_id_from_invite_code(invite_code: str) -> int | None:
     return None
 
 
+@api_groups_router.post("/", response_model=GroupResponse)
 @groups_router.post("/", response_model=GroupResponse)
 def create_group(
     payload: CreateGroupRequest,
@@ -204,6 +328,7 @@ def create_group(
     )
 
 
+@api_groups_router.post("/join", response_model=GroupResponse)
 @groups_router.post("/join", response_model=GroupResponse)
 def join_group(
     payload: JoinGroupRequest,
@@ -249,3 +374,8 @@ def join_group(
 
 
 app = create_app()
+
+
+@app.get("/healthz", tags=["health"])
+def healthcheck():
+    return {"status": "ok"}

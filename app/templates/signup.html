@@ -31,6 +31,7 @@
 
     <section class="card" aria-label="Signup card">
       <form class="email-row" method="POST" action="{{ url_for('web_signup') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
         <div class="input-grid">
           <div class="input-wrap">
             <input type="text" name="first_name" value="{{ form_data['first_name'] }}" placeholder="First name" required />

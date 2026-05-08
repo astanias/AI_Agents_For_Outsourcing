@@ -22,7 +22,7 @@ from app.services.assistant import (
 )
 
 
-router = APIRouter(prefix="/api/assistant", tags=["assistant"])
+router = APIRouter(prefix="/api/assistant", tags=["assistant"], include_in_schema=False)
 
 
 @router.post("/threads", response_model=AssistantThreadSummary)

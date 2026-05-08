@@ -1,25 +1,4 @@
-const API_URL = "http://127.0.0.1:8000";
-
-function getToken() {
-  return localStorage.getItem("access_token") || "";
-}
-
-function authHeaders() {
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${getToken()}`,
-  };
-}
-
-async function parseError(response: Response, fallback: string) {
-  try {
-    const data = await response.json();
-    if (typeof data?.detail === "string") return data.detail;
-  } catch {
-    // Fall back to a generic message when backend doesn't return JSON.
-  }
-  return fallback;
-}
+import { apiJson } from "../../lib/api";
 
 export interface CreateGroupPayload {
   name: string;
@@ -31,42 +10,58 @@ export interface JoinGroupPayload {
   groupId?: number;
 }
 
+export interface GroupSummary {
+  id: number;
+  name: string;
+  description: string | null;
+  role: "owner" | "admin" | "member" | string;
+}
+
+export interface GroupMember {
+  id: number;
+  email: string;
+  first_name: string;
+  last_name: string;
+  role: "owner" | "admin" | "member" | string;
+}
+
+export interface GroupAvailabilitySlot {
+  id: number;
+  user_id: number;
+  email: string;
+  first_name: string;
+  last_name: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+}
+
 export async function getGroups() {
-  const res = await fetch(`${API_URL}/groups/`, {
-    headers: authHeaders(),
-  });
-
-  if (!res.ok) {
-    throw new Error(await parseError(res, "Failed to fetch groups"));
-  }
-
-  return res.json();
+  return apiJson<GroupSummary[]>("/api/groups/");
 }
 
 export async function createGroup(payload: CreateGroupPayload) {
-  const res = await fetch(`${API_URL}/groups/`, {
+  return apiJson<GroupSummary>("/api/groups/", {
     method: "POST",
-    headers: authHeaders(),
     body: JSON.stringify(payload),
   });
-
-  if (!res.ok) {
-    throw new Error(await parseError(res, "Failed to create group"));
-  }
-
-  return res.json();
 }
 
 export async function joinGroup(payload: JoinGroupPayload) {
-  const res = await fetch(`${API_URL}/groups/join`, {
+  return apiJson<GroupSummary>("/api/groups/join", {
     method: "POST",
-    headers: authHeaders(),
     body: JSON.stringify(payload),
   });
+}
 
-  if (!res.ok) {
-    throw new Error(await parseError(res, "Failed to join group"));
-  }
+export async function getGroup(groupId: number) {
+  return apiJson<GroupSummary>(`/api/groups/${groupId}`);
+}
 
-  return res.json();
+export async function getGroupMembers(groupId: number) {
+  return apiJson<GroupMember[]>(`/api/groups/${groupId}/members`);
+}
+
+export async function getGroupAvailability(groupId: number) {
+  return apiJson<GroupAvailabilitySlot[]>(`/api/groups/${groupId}/availability`);
 }

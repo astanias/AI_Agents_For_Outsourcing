@@ -7,6 +7,7 @@ import Signup from "./features/auth/Signup";
 import Dashboard from "./features/dashboard/Dashboard";
 import GroupList from "./features/groups/GroupList";
 import CreateGroup from "./features/groups/CreateGroup";
+import GroupDetail from "./features/groups/GroupDetail";
 import PersonalCalendar from "./features/calendar/PersonalCalendar";
 import MeetingList from "./features/meetings/MeetingList";
 import ProfileSettings from "./features/settings/ProfileSettings";
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="/groups" element={<GroupList />} />
         <Route path="/groups/new" element={<CreateGroup />} />
         <Route path="/groups/join" element={<CreateGroup />} />
+        <Route path="/groups/:groupId" element={<GroupDetail />} />
         <Route path="/calendar" element={<PersonalCalendar />} />
         <Route path="/meetings" element={<MeetingList />} />
         <Route path="/settings" element={<ProfileSettings />} />

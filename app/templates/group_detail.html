@@ -63,6 +63,7 @@
             </div>
 
             <form method="POST" action="{{ url_for('web_groups_invite', group_id=group['id']) }}" class="settings-form-stack">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
               <input type="hidden" name="month" value="{{ group_calendar_view['selected_month'] }}" />
               {% if selected_member %}
                 <input type="hidden" name="member_id" value="{{ selected_member['id'] }}" />
@@ -135,6 +136,7 @@
                   <div class="group-roster-actions">
                     {% if member['role'] != 'owner' and member['id'] != group_membership['user_id'] %}
                       <form method="POST" action="{{ url_for('web_groups_update_member_role', group_id=group['id'], target_user_id=member['id']) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
                         <input type="hidden" name="month" value="{{ group_calendar_view['selected_month'] }}" />
                         {% if selected_member %}
                           <input type="hidden" name="member_id" value="{{ selected_member['id'] }}" />
@@ -146,6 +148,7 @@
                       </form>
 
                       <form method="POST" action="{{ url_for('web_groups_remove_member', group_id=group['id'], target_user_id=member['id']) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
                         <input type="hidden" name="month" value="{{ group_calendar_view['selected_month'] }}" />
                         {% if selected_member %}
                           <input type="hidden" name="member_id" value="{{ selected_member['id'] }}" />
@@ -160,6 +163,183 @@
           </div>
         </section>
       </div>
+
+      {% if group_can_manage %}
+      <section class="composer-panel" data-group-meeting-planner-root>
+        <div class="composer-header">
+          <div>
+            <p class="section-kicker">Team Planning</p>
+            <h3 class="composer-title">Make a meeting</h3>
+          </div>
+          <p class="composer-copy">
+            Drag the meeting block onto the weekly calendar to snap it into a time slot.
+          </p>
+        </div>
+
+        <form method="POST" action="{{ url_for('web_meetings_create') }}" class="meeting-form" data-group-meeting-form>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
+          <input type="hidden" name="q" value="" />
+          <input type="hidden" name="status" value="" />
+          <input type="hidden" name="mine" value="" />
+          <input type="hidden" name="day" value="{{ group_calendar_view['selected_month'] }}" />
+          <input type="hidden" name="meeting_type" value="in_person" data-group-meeting-type />
+          <input type="hidden" name="start_time" value="{{ group_meeting_form['start_time'] }}" data-group-meeting-start />
+          <input type="hidden" name="end_time" value="{{ group_meeting_form['end_time'] }}" data-group-meeting-end />
+
+          <div class="group-meeting-shell">
+            <div class="group-meeting-controls">
+              <section class="meeting-type-switcher" data-meeting-type-toggle>
+                <div class="meeting-type-switcher-header">
+                  <span class="field-label">Meeting format</span>
+                  <p class="field-help">Switch between in-person and remote meetings.</p>
+                </div>
+                <div class="meeting-type-switcher-options">
+                  <label class="meeting-type-switcher-option">
+                    <input type="radio" name="meeting_type_ui" value="in_person" checked />
+                    <span>In person</span>
+                  </label>
+                  <label class="meeting-type-switcher-option">
+                    <input type="radio" name="meeting_type_ui" value="virtual" />
+                    <span>Remote</span>
+                  </label>
+                </div>
+              </section>
+
+              <div class="form-grid form-grid-wide">
+                <label class="form-field">
+                  <span class="field-label">Meeting title</span>
+                  <input
+                    class="text-input"
+                    name="title"
+                    value="{{ group_meeting_form['title'] }}"
+                    placeholder="Weekly team sync"
+                    required
+                    data-group-meeting-title
+                  />
+                </label>
+
+                <label class="form-field">
+                  <span class="field-label">
+                    Duration
+                    <span class="field-pill" data-group-meeting-duration-label>60 min</span>
+                  </span>
+                  <input
+                    type="range"
+                    min="15"
+                    max="180"
+                    step="15"
+                    value="60"
+                    class="group-meeting-duration-slider"
+                    data-group-meeting-duration
+                  />
+                  <div class="group-meeting-duration-scale" aria-hidden="true">
+                    <span>15</span>
+                    <span>60</span>
+                    <span>180</span>
+                  </div>
+                </label>
+              </div>
+
+              <div class="form-grid form-grid-wide">
+                <label class="form-field">
+                  <span class="field-label">
+                    <span data-meeting-location-label>Location</span>
+                    <span class="field-pill">Optional</span>
+                  </span>
+                  <div class="location-autocomplete" data-location-autocomplete-root>
+                    <input
+                      class="text-input"
+                      name="location"
+                      value="{{ group_meeting_form['location'] }}"
+                      placeholder="Search for a place"
+                      autocomplete="off"
+                      data-location-autocomplete-input
+                      data-autocomplete-url="{{ url_for('web_locations_autocomplete') }}"
+                      data-meeting-location-input
+                    />
+                    <input type="hidden" name="location_raw" value="{{ group_meeting_form['location_raw'] }}" data-location-raw />
+                    <input type="hidden" name="location_latitude" value="{{ group_meeting_form['location_latitude'] }}" data-location-latitude />
+                    <input type="hidden" name="location_longitude" value="{{ group_meeting_form['location_longitude'] }}" data-location-longitude />
+                    <div class="location-suggestions" data-location-suggestions hidden></div>
+                  </div>
+                  <span class="field-help" data-meeting-location-help>Choose a suggestion to save exact coordinates for travel checks.</span>
+                </label>
+
+                <label class="form-field">
+                  <span class="field-label">Invite people</span>
+                  <div class="invitee-picker" data-invitee-picker-root>
+                    <textarea
+                      class="text-area"
+                      name="invitees"
+                      placeholder="Invite users by email. Commas, semicolons, or new lines all work."
+                      rows="3"
+                      data-invitee-input
+                      data-invitee-url="{{ url_for('web_invitee_suggestions') }}"
+                    >{{ group_meeting_form['invitees'] }}</textarea>
+                    <div class="invitee-suggestions" data-invitee-suggestions aria-live="polite" hidden></div>
+                  </div>
+                  <span class="field-help">The roster is prefilled, but you can edit it before creating the meeting.</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="group-meeting-calendar-panel">
+              <div class="group-meeting-calendar-header">
+                <div>
+                  <p class="section-kicker">Drag and drop</p>
+                  <h4>Weekly placement</h4>
+                  <p class="composer-copy">Drop the draft block into a time slot to set the meeting start and end time.</p>
+                </div>
+                <button type="button" class="group-meeting-draft" draggable="true" data-group-meeting-draft>
+                  <span class="group-meeting-draft-kicker">Draft meeting</span>
+                  <strong data-group-meeting-draft-title>{{ group_meeting_form['title'] or 'Team sync' }}</strong>
+                  <span data-group-meeting-draft-time>{{ group_meeting_form['start_time'][11:16] }} - {{ group_meeting_form['end_time'][11:16] }}</span>
+                </button>
+              </div>
+
+              <div class="group-meeting-grid-head">
+                <span>Time</span>
+                {% for day_idx, day_name in day_options %}
+                  <span>{{ day_name }}</span>
+                {% endfor %}
+              </div>
+
+              <div class="group-meeting-grid" data-group-meeting-grid data-week-start="{{ group_calendar_view['selected_month'] }}">
+                {% for row in group_meeting_grid['rows'] %}
+                  <div class="group-meeting-time-cell{% if not row['is_hour'] %} is-quarter{% endif %}">{{ row['label'] }}</div>
+                  {% for cell in row['cells'] %}
+                    <div
+                      class="group-meeting-slot group-meeting-slot-{{ cell['status'] }}"
+                      data-group-meeting-slot
+                      data-status="{{ cell['status'] }}"
+                      data-day-of-week="{{ cell['day_of_week'] }}"
+                      data-start-minutes="{{ row['start_minutes'] }}"
+                      data-end-minutes="{{ row['end_minutes'] }}"
+                      data-unavailable-count="{{ cell['unavailable_count'] }}"
+                      data-unavailable-members="{{ cell['unavailable_members'] | join('||') }}"
+                    >
+                    </div>
+                  {% endfor %}
+                {% endfor %}
+                <div class="group-meeting-overlay" data-group-meeting-overlay aria-hidden="true"></div>
+              </div>
+
+              <div class="group-meeting-summary">
+                <p>
+                  Selected slot:
+                  <strong data-group-meeting-summary>Date not set</strong>
+                </p>
+                <p class="field-help">Click a slot if you prefer not to drag the block.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-actions">
+            <button class="btn btn-primary btn-inline-wide" type="submit">Create Meeting</button>
+          </div>
+        </form>
+      </section>
+      {% endif %}
 
       <section class="calendar-board group-calendar-board">
         <div class="calendar-topbar">
@@ -378,5 +558,6 @@
   </main>
 
   <script src="{{ url_for('static', path='meetings.js') }}"></script>
+  <script src="{{ url_for('static', path='group_meeting_planner.js') }}"></script>
 </body>
 </html>

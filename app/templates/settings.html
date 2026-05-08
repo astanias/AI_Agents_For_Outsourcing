@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Settings</title>
   {% include "_theme_head.html" %}
-  <script defer src="{{ url_for('static', path='availability.js') }}"></script>
+  <script defer src="{{ url_for('static', path='availability.js') }}?v=painted-grid-1"></script>
 </head>
 <body class="settings-page">
   {% include "_app_header.html" %}
@@ -40,6 +40,7 @@
           </div>
 
           <form method="POST" action="{{ url_for('web_settings_profile') }}" class="settings-form-stack">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
             <div class="settings-profile-hero">
               <div class="settings-avatar" data-avatar-preview style="background: {{ profile_avatar_color_hex }};">{{ current_user_initials }}</div>
               <div class="settings-profile-copy">
@@ -137,6 +138,7 @@
           </div>
 
           <form method="POST" action="{{ url_for('web_settings_notifications') }}" class="settings-form-stack">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
             <div class="settings-stack">
               <section class="settings-subpanel">
                 <p class="settings-subpanel-title">Delivery Channels</p>

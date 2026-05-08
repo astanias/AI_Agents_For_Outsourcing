@@ -153,18 +153,21 @@
                     <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem;">
                       <span class="field-label">Your RSVP:</span>
                       <form method="POST" action="{{ url_for('web_meetings_overview_rsvp') }}" style="display:inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
                         <input type="hidden" name="meeting_id" value="{{ meeting['id'] }}" />
                         <input type="hidden" name="scope" value="{{ overview_scope }}" />
                         <input type="hidden" name="status" value="accepted" />
                         <button class="btn btn-inline btn-sm{% if meeting.get('current_user_status') == 'accepted' %} btn-primary{% else %} btn-soft{% endif %}" type="submit">✓ Accept</button>
                       </form>
                       <form method="POST" action="{{ url_for('web_meetings_overview_rsvp') }}" style="display:inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
                         <input type="hidden" name="meeting_id" value="{{ meeting['id'] }}" />
                         <input type="hidden" name="scope" value="{{ overview_scope }}" />
                         <input type="hidden" name="status" value="maybe" />
                         <button class="btn btn-inline btn-sm{% if meeting.get('current_user_status') == 'maybe' %} btn-primary{% else %} btn-soft{% endif %}" type="submit">? Maybe</button>
                       </form>
                       <form method="POST" action="{{ url_for('web_meetings_overview_rsvp') }}" style="display:inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
                         <input type="hidden" name="meeting_id" value="{{ meeting['id'] }}" />
                         <input type="hidden" name="scope" value="{{ overview_scope }}" />
                         <input type="hidden" name="status" value="declined" />
@@ -177,6 +180,7 @@
                     <details class="overview-action-panel">
                       <summary class="btn btn-soft btn-inline overview-add-people-button">+ Add people</summary>
                       <form method="POST" action="{{ url_for('web_meetings_overview_invitees') }}" class="overview-inline-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
                         <input type="hidden" name="meeting_id" value="{{ meeting['id'] }}" />
                         <input type="hidden" name="scope" value="{{ overview_scope }}" />
 

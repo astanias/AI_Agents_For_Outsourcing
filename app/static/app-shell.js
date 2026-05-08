@@ -1,5 +1,5 @@
 (function () {
-  var BELL_REFRESH_INTERVAL_MS = 60000;
+  var BELL_REFRESH_INTERVAL_MS = 10000;
 
   function dismissToast(toast) {
     if (!toast || toast.dataset.toastDismissed === "true") {

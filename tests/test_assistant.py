@@ -63,6 +63,14 @@ def _meeting_count() -> int:
         db.close()
 
 
+def test_assistant_routes_are_hidden_from_openapi_docs(client):
+    response = client.get("/openapi.json")
+    assert response.status_code == 200, response.text
+
+    paths = response.json()["paths"]
+    assert not any(path.startswith("/api/assistant") for path in paths)
+
+
 def test_assistant_threads_are_scoped_to_current_user(client):
     ada_token = _register(client, email="ada@example.com", first_name="Ada")
     grace_token = _register(client, email="grace@example.com", first_name="Grace")

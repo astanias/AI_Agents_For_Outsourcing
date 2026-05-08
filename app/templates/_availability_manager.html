@@ -1,79 +1,55 @@
-<form method="POST" action="{{ url_for('web_availability_add') }}" class="availability-form">
+<form method="POST" action="{{ url_for('web_availability_add') }}" class="availability-form" data-availability-calendar-root data-availability-selected-cells='{{ availability_calendar["selected_cells"] | tojson }}'>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
   <input type="hidden" name="next" value="{{ availability_next }}" />
+  <input type="hidden" name="selected_cells" value="{{ availability_form_data['selected_cells'] }}" data-availability-selected-cells-input />
 
-  <div class="availability-form-grid">
-    <fieldset class="availability-field-card availability-day-card">
-      <legend class="availability-field-label">Days</legend>
-      <div class="availability-day-toggle-grid">
-        {% for day_idx, day_name in day_options %}
-          <label class="availability-day-toggle">
-            <input
-              type="checkbox"
-              name="day_of_week"
-              value="{{ day_idx }}"
-              {% if (day_idx|string) in availability_form_data["selected_days"] %}checked{% endif %}
-            />
-            <span>{{ day_short_names[day_idx] }}</span>
-          </label>
+  <section class="availability-field-card availability-calendar-card">
+    <div class="availability-calendar-header">
+      <div>
+        <p class="availability-field-label">Weekly Availability</p>
+        <p class="availability-field-help">Hold and drag across the calendar to paint 15-minute availability blocks.</p>
+      </div>
+      <div class="availability-calendar-summary" data-availability-summary>
+        {{ availability_calendar['selected_count'] }} cell{% if availability_calendar['selected_count'] != 1 %}s{% endif %} selected
+      </div>
+    </div>
+
+    <div class="group-meeting-grid-head">
+      <span>Time</span>
+      {% for day_idx, day_name in day_options %}
+        <span>{{ day_short_names[day_idx] }}</span>
+      {% endfor %}
+    </div>
+
+    <div class="group-meeting-grid" data-group-meeting-grid>
+      {% for row in availability_calendar['rows'] %}
+        <div class="group-meeting-time-cell{% if not row['is_hour'] %} is-quarter{% endif %}">{{ row['label'] }}</div>
+        {% for cell in row['cells'] %}
+          <div
+            class="group-meeting-slot {% if cell['is_selected'] %}group-meeting-slot-full{% else %}group-meeting-slot-none{% endif %}"
+            data-availability-cell
+            data-group-meeting-slot
+            data-day-of-week="{{ cell['day_of_week'] }}"
+            data-start-minutes="{{ cell['start_minutes'] }}"
+            data-end-minutes="{{ cell['end_minutes'] }}"
+            data-unavailable-count="0"
+            role="button"
+            tabindex="0"
+            aria-label="{{ day_short_names[cell['day_of_week']] }} {{ row['label'] or '' }}"
+          ></div>
         {% endfor %}
-      </div>
-      <span class="availability-field-help">Pick one or more days to add the same availability window all at once.</span>
-    </fieldset>
+      {% endfor %}
+      <div class="group-meeting-overlay" data-group-meeting-overlay aria-hidden="true"></div>
+    </div>
 
-    <label class="availability-field-card availability-time-card availability-time-card-start" data-time-picker>
-      <span class="availability-field-label">Start</span>
-      <div class="availability-time-native-wrapper" data-time-native-wrapper>
-        <input
-          class="availability-time-input"
-          type="time"
-          name="start_time"
-          value="{{ availability_form_data['start_time'] }}"
-          required
-          step="900"
-          data-time-native
-        />
+    <div class="availability-calendar-footer">
+      <span class="availability-field-help">Your painted blocks will save as 15-minute windows.</span>
+      <div class="availability-calendar-actions">
+        <button type="button" class="btn btn-soft btn-inline" data-availability-clear>Clear selection</button>
+        <button type="submit" class="btn btn-primary btn-inline" data-availability-save disabled>Saved</button>
       </div>
-      <div class="availability-time-enhanced" data-time-enhanced hidden>
-        <div class="availability-time-controls">
-          <select aria-label="Start hour" data-time-hour></select>
-          <span>:</span>
-          <select aria-label="Start minute" data-time-minute></select>
-          <select aria-label="Start period" data-time-period></select>
-        </div>
-      </div>
-      <span class="availability-field-help">Click anywhere in this card to open the time picker. Minutes stay in 15-minute steps.</span>
-    </label>
-
-    <label class="availability-field-card availability-time-card availability-time-card-end" data-time-picker>
-      <span class="availability-field-label">End</span>
-      <div class="availability-time-native-wrapper" data-time-native-wrapper>
-        <input
-          class="availability-time-input"
-          type="time"
-          name="end_time"
-          value="{{ availability_form_data['end_time'] }}"
-          required
-          step="900"
-          data-time-native
-        />
-      </div>
-      <div class="availability-time-enhanced" data-time-enhanced hidden>
-        <div class="availability-time-controls">
-          <select aria-label="End hour" data-time-hour></select>
-          <span>:</span>
-          <select aria-label="End minute" data-time-minute></select>
-          <select aria-label="End period" data-time-period></select>
-        </div>
-      </div>
-      <span class="availability-field-help">Opens the native time wheel or picker for quick adjustment in quarter-hour steps.</span>
-    </label>
-  </div>
-
-  <div class="availability-form-actions">
-    <button class="btn btn-primary btn-inline-wide" type="submit">
-      Add preference
-    </button>
-  </div>
+    </div>
+  </section>
 </form>
 
 {% if preferences|length == 0 %}
@@ -81,44 +57,5 @@
     <p class="section-kicker">Nothing Yet</p>
     <h3>No availability preferences added yet</h3>
     <p>Pick the days and time ranges you usually prefer, then save them here for future meeting checks.</p>
-  </section>
-{% else %}
-  <section class="availability-list-card">
-    <div class="availability-list-header">
-      <div>
-        <p class="section-kicker">Saved Preferences</p>
-        <h3>Your weekly windows</h3>
-      </div>
-      <p class="availability-list-copy">{{ preferences|length }} saved preference{% if preferences|length != 1 %}s{% endif %}</p>
-    </div>
-
-    <div class="availability-table-wrap">
-      <table class="availability-table">
-        <thead>
-          <tr>
-            <th>Day</th>
-            <th>Start</th>
-            <th>End</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for pref in preferences %}
-            <tr>
-              <td>{{ pref["day_name"] }}</td>
-              <td>{{ pref["start_time"] }}</td>
-              <td>{{ pref["end_time"] }}</td>
-              <td>
-                <form method="POST" action="{{ url_for('web_availability_delete') }}">
-                  <input type="hidden" name="preference_id" value="{{ pref['id'] }}" />
-                  <input type="hidden" name="next" value="{{ availability_next }}" />
-                  <button class="btn btn-soft btn-inline availability-delete-btn" type="submit">Delete</button>
-                </form>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
   </section>
 {% endif %}

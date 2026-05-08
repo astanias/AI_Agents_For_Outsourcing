@@ -73,3 +73,21 @@ def test_groups_page_and_api_can_coexist(client):
     assert api_response.status_code == 200, api_response.text
     assert api_response.headers["content-type"].startswith("application/json")
     assert api_response.json() == []
+
+    create_response = client.post(
+        "/api/groups/",
+        headers=_auth_headers(token),
+        json={"name": "Kernel Crew", "description": "Systems planning"},
+    )
+    assert create_response.status_code == 200, create_response.text
+    group_id = create_response.json()["id"]
+
+    detail_page_response = client.get(f"/groups/{group_id}")
+    assert detail_page_response.status_code == 200, detail_page_response.text
+    assert detail_page_response.headers["content-type"].startswith("text/html")
+    assert "Kernel Crew" in detail_page_response.text
+
+    api_detail_response = client.get(f"/api/groups/{group_id}", headers=_auth_headers(token))
+    assert api_detail_response.status_code == 200, api_detail_response.text
+    assert api_detail_response.headers["content-type"].startswith("application/json")
+    assert api_detail_response.json()["name"] == "Kernel Crew"

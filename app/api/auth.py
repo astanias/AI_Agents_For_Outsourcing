@@ -290,11 +290,19 @@ def _verify_google_id_token(id_token: str) -> dict:
     return claims
 
 
-@router.post("/google/exchange", response_model=TokenResponse)
-def google_exchange(payload: GoogleExchangeRequest, request: Request, response: Response, db: Session = Depends(get_db)):
-    tokens = _google_exchange_code(code=payload.code, code_verifier=payload.code_verifier, redirect_uri=payload.redirect_uri)
+def authenticate_google_code(
+    db: Session,
+    *,
+    code: str,
+    code_verifier: str | None,
+    redirect_uri: str,
+) -> User:
+    tokens = _google_exchange_code(code=code, code_verifier=code_verifier, redirect_uri=redirect_uri)
     claims = _verify_google_id_token(tokens.get("id_token"))
+    return get_or_create_google_user(db, claims=claims)
 
+
+def get_or_create_google_user(db: Session, *, claims: dict) -> User:
     sub = str(claims["sub"])
     email = str(claims["email"]).strip().lower()
     given = (claims.get("given_name") or "").strip() or "Google"
@@ -308,15 +316,28 @@ def google_exchange(payload: GoogleExchangeRequest, request: Request, response: 
         user = db.get(User, identity.user_id)
         if user is None or not user.is_active:
             raise HTTPException(status_code=401, detail="User not found")
-        return _issue_tokens(db, user=user, request=request, response=response)
+        return user
 
-    # Prevent auto-merging by email to avoid account takeover.
     existing = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if existing is not None:
-        raise HTTPException(
-            status_code=409,
-            detail="An account with this email already exists. Log in and link Google instead.",
+        if not existing.is_active:
+            raise HTTPException(status_code=401, detail="User not found")
+        db.add(
+            AuthIdentity(
+                user_id=existing.id,
+                provider="google",
+                provider_subject=sub,
+                email=email,
+                email_verified=True,
+            )
         )
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status_code=409, detail="Google account already linked")
+        db.refresh(existing)
+        return existing
 
     user = User(first_name=given, last_name=family, email=email)
     db.add(user)
@@ -332,6 +353,17 @@ def google_exchange(payload: GoogleExchangeRequest, request: Request, response: 
     )
     db.commit()
     db.refresh(user)
+    return user
+
+
+@router.post("/google/exchange", response_model=TokenResponse)
+def google_exchange(payload: GoogleExchangeRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+    user = authenticate_google_code(
+        db,
+        code=payload.code,
+        code_verifier=payload.code_verifier,
+        redirect_uri=payload.redirect_uri,
+    )
     return _issue_tokens(db, user=user, request=request, response=response)
 
 

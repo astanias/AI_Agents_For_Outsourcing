@@ -6,7 +6,7 @@ import { getGroups } from './groups.api';
 interface Group {
   id: number;
   name: string;
-  description: string;
+  description: string | null;
   role: string;
 }
 
@@ -120,6 +120,14 @@ export default function GroupList() {
               <p className="text-slate-500 dark:text-slate-400 text-sm">
                 {group.description || 'No description provided.'}
               </p>
+
+              <button
+                type="button"
+                onClick={() => navigate(`/groups/${group.id}`)}
+                className="mt-5 w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600"
+              >
+                Open workspace
+              </button>
             </div>
           ))}
         </div>

@@ -39,6 +39,7 @@
           </div>
 
           <form method="POST" action="{{ url_for('web_groups_create') }}" class="settings-form-stack">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
             <label class="form-field">
               <span class="field-label">Group Name</span>
               <input class="text-input" type="text" name="name" value="{{ group_create_form['name'] }}" placeholder="Senior Design Team" required />
@@ -64,6 +65,7 @@
           </div>
 
           <form method="POST" action="{{ url_for('web_groups_join') }}" class="settings-form-stack">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
             <label class="form-field">
               <span class="field-label">Group Token</span>
               <input class="text-input groups-token-input" type="text" inputmode="numeric" maxlength="9" name="token" value="{{ group_join_form['token'] }}" placeholder="000000123" required />

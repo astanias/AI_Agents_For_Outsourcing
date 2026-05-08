@@ -12,16 +12,19 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg2://appuser:apppassword@localhost:5433/appdb"
 
+    app_env: str = "development"
+
     jwt_secret: str = "dev-change-me"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 30
 
-    frontend_origin: str = "http://localhost:5173"
+    frontend_origin: str | None = None
 
     cookie_secure: bool = False
     cookie_samesite: str = "lax"  # lax|strict|none
     cookie_domain: str | None = None
+    csrf_protection_enabled: bool = False
 
     google_client_id: str | None = None
     google_client_secret: str | None = None
@@ -55,6 +58,33 @@ class Settings(BaseSettings):
         if value == "":
             return None
         return value
+
+    @property
+    def is_production(self) -> bool:
+        return self.app_env.strip().lower() in {"prod", "production"}
+
+    @property
+    def is_deployed_like(self) -> bool:
+        return self.app_env.strip().lower() in {"prod", "production", "stage", "staging"}
+
+    def validate_runtime(self) -> None:
+        if not self.is_production:
+            return
+
+        errors: list[str] = []
+        if self.jwt_secret == "dev-change-me" or len(self.jwt_secret) < 32:
+            errors.append("JWT_SECRET must be changed to a strong value of at least 32 characters")
+        if not self.cookie_secure:
+            errors.append("COOKIE_SECURE must be true in production")
+        if not self.csrf_protection_enabled:
+            errors.append("CSRF_PROTECTION_ENABLED must be true in production")
+        if self.frontend_origin and "localhost" in self.frontend_origin.lower():
+            errors.append("FRONTEND_ORIGIN must not point to localhost in production")
+        if self.frontend_origin and "127.0.0.1" in self.frontend_origin:
+            errors.append("FRONTEND_ORIGIN must not point to 127.0.0.1 in production")
+
+        if errors:
+            raise RuntimeError("Unsafe production configuration: " + "; ".join(errors))
 
 
 settings = Settings()

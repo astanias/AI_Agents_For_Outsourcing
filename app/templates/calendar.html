@@ -5,93 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Calendar</title>
   {% include "_theme_head.html" %}
-  <style>
-    .calendar-compact-header {
-      display: flex !important;
-      flex-direction: row !important;
-      align-items: center;
-      justify-content: flex-start;
-      padding: 1.25rem 1.5rem 1rem;
-      gap: 1.5rem;
-      width: 100%;
-    }
-    .calendar-compact-controls {
-      display: flex !important;
-      flex-direction: row !important;
-      align-items: center;
-      gap: 0.5rem;
-      flex-wrap: nowrap;
-      white-space: nowrap;
-    }
-    .calendar-compact-controls .btn {
-      flex-shrink: 0;
-      font-size: 0.75rem;
-      padding: 0.25rem 0.6rem;
-      width: auto !important;
-      min-width: unset !important;
-    }
-    .calendar-compact-month-form input {
-      padding: 0.2rem 0.4rem;
-      font-size: 0.78rem;
-      border-radius: 0.5rem;
-      border: 1px solid var(--border, #dbe4f0);
-      background: var(--input-bg, #fff);
-    }
-    .calendar-compact-month-form button {
-      font-size: 0.75rem;
-      padding: 0.25rem 0.6rem;
-    }
-    .calendar-compact-title {
-      display: flex;
-      align-items: baseline;
-      gap: 0.75rem;
-    }
-    .calendar-compact-title h1 {
-      font-size: 1.5rem;
-      margin: 0;
-      font-weight: 700;
-    }
-    .calendar-compact-title .calendar-kicker {
-      font-size: 0.75rem;
-      margin: 0;
-    }
-    .calendar-compact-title .calendar-topbar-copy {
-      font-size: 0.8rem;
-      color: var(--muted, #64748b);
-      margin: 0;
-    }
-    
-    .calendar-compact-month-form {
-      display: flex !important;
-      flex-direction: row !important;
-      align-items: center;
-      gap: 0.4rem;
-    }
-    .calendar-compact-month-form input {
-      padding: 0.3rem 0.5rem;
-      font-size: 0.85rem;
-      border-radius: 0.5rem;
-      border: 1px solid var(--border, #dbe4f0);
-      background: var(--input-bg, #fff);
-    }
-    .calendar-compact-month-form button {
-      padding: 0.3rem 0.75rem;
-      font-size: 0.85rem;
-    }
-    .calendar-sidebar-compact {
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-      padding: 0.75rem 0.5rem;
-    }
-    .calendar-sidebar-compact-header {
-      padding: 0 0.5rem 0.5rem;
-    }
-    .calendar-sidebar-compact-header h3 {
-      font-size: 1rem;
-      margin: 0.1rem 0 0;
-    }
-  </style>
 </head>
 <body class="calendar-page">
   {% include "_app_header.html" %}
@@ -109,22 +22,90 @@
 
       <!-- Compact header: title + nav all in one row -->
       <div class="calendar-compact-header">
-        <div>
-          <p class="calendar-kicker" style="margin:0;">Monthly Calendar</p>
-          <h1 style="font-size:2rem;margin:0.1rem 0 0;">{{ calendar_view['month_label'] }}</h1>
-          <p class="calendar-topbar-copy" style="margin:0.15rem 0 0;font-size:0.85rem;color:var(--muted,#64748b);">{{ calendar_view['meeting_count_label'] }} this month</p>
+        <div class="calendar-compact-title">
+          <p class="calendar-kicker">Monthly Calendar</p>
+          <h1>{{ calendar_view['month_label'] }}</h1>
+          <p class="calendar-topbar-copy">{{ calendar_view['meeting_count_label'] }} this month</p>
         </div>
 
         <div class="calendar-compact-controls">
-          <a class="btn btn-soft btn-inline" href="{{ url_for('web_calendar') }}?{{ calendar_view['prev_query'] }}">← Previous</a>
+          <a class="btn btn-soft btn-inline" href="{{ url_for('web_calendar') }}?{{ calendar_view['prev_query'] }}">Previous</a>
           <a class="btn btn-soft btn-inline" href="{{ url_for('web_calendar') }}?{{ calendar_view['today_query'] }}">This month</a>
-          <a class="btn btn-soft btn-inline" href="{{ url_for('web_calendar') }}?{{ calendar_view['next_query'] }}">Next →</a>
+          <a class="btn btn-soft btn-inline" href="{{ url_for('web_calendar') }}?{{ calendar_view['next_query'] }}">Next</a>
           <form method="GET" action="{{ url_for('web_calendar') }}" class="calendar-compact-month-form">
             <input type="month" name="month" value="{{ calendar_view['selected_month'] }}" />
             <button class="btn btn-primary btn-inline" type="submit">Go</button>
           </form>
         </div>
       </div>
+
+      <section class="calendar-mobile-view" aria-label="Mobile calendar">
+        <div class="calendar-mobile-days" aria-label="{{ calendar_view['month_label'] }} days">
+          {% for day in calendar_view['month_days'] %}
+            <a
+              class="calendar-mobile-day{% if day['is_today'] %} calendar-mobile-day-today{% endif %}{% if day['meeting_count'] %} has-meetings{% endif %}"
+              href="#calendar-mobile-day-{{ day['date_iso'] }}"
+            >
+              <span>{{ day['weekday_short'] }}</span>
+              <strong>{{ day['day_number'] }}</strong>
+              {% if day['meeting_count'] %}
+                <small>{{ day['meeting_count'] }}</small>
+              {% endif %}
+            </a>
+          {% endfor %}
+        </div>
+
+        <div class="calendar-mobile-agenda">
+          <div class="calendar-mobile-agenda-header">
+            <p class="calendar-kicker">Agenda</p>
+            <h2>{{ calendar_view['meeting_count_label'] }}</h2>
+          </div>
+
+          {% if calendar_view['is_empty'] %}
+            <div class="calendar-sidebar-empty">
+              <h4>No meetings scheduled</h4>
+              <p>This month is open. Create a meeting from the scheduler and it will show up here.</p>
+            </div>
+          {% else %}
+            {% for day in calendar_view['month_days'] %}
+              {% if day['all_meetings'] %}
+                <section id="calendar-mobile-day-{{ day['date_iso'] }}" class="calendar-mobile-agenda-day">
+                  <p class="calendar-sidebar-label">{{ day['weekday_short'] }} {{ day['day_number'] }}</p>
+                  <div class="calendar-sidebar-cards">
+                    {% for meeting in day['all_meetings'] %}
+                      <button
+                        type="button"
+                        class="calendar-list-card calendar-list-card-{{ meeting['color_token'] }}"
+                        data-calendar-open
+                        data-meeting-id="{{ meeting['id'] }}"
+                        data-title="{{ meeting['title']|e }}"
+                        data-description="{{ (meeting['description'] or '')|e }}"
+                        data-date-label="{{ meeting['date_label']|e }}"
+                        data-time-range="{{ meeting['time_range_label']|e }}"
+                        data-start-value="{{ meeting['start_input_value']|e }}"
+                        data-end-value="{{ meeting['end_input_value']|e }}"
+                        data-location="{{ meeting['location_label']|e }}"
+                        data-meeting-type="{{ meeting['meeting_type']|e }}"
+                        data-can-edit="{{ 'true' if meeting['is_organizer'] else 'false' }}"
+                        data-organizer="{{ meeting['organizer_email']|e }}"
+                        data-status="{{ meeting['status_label']|e }}"
+                        data-travel="{{ meeting['travel_summary']|e }}"
+                        data-warning-message="{{ meeting['warning_message']|e }}"
+                        data-warning-severity="{{ meeting['primary_severity']|e }}"
+                        data-detail-url="{{ meeting['detail_url']|e }}"
+                      >
+                        <span class="calendar-list-card-time">{{ meeting['time_range_label'] }}</span>
+                        <strong>{{ meeting['title'] }}</strong>
+                        <span class="calendar-list-card-location">{{ meeting['location_label'] }}</span>
+                      </button>
+                    {% endfor %}
+                  </div>
+                </section>
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+        </div>
+      </section>
 
       <div class="calendar-layout">
         <section class="calendar-panel" style="padding-top:0;">
@@ -279,6 +260,7 @@
         <button type="button" class="btn btn-soft btn-inline" data-calendar-edit-toggle hidden>Edit meeting</button>
         <a class="btn btn-primary btn-inline-wide" data-calendar-modal-link href="#">Open details</a>
         <form method="POST" action="{{ url_for('web_meetings_overview_cancel') }}" data-calendar-cancel-form style="display:none;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
           <input type="hidden" name="meeting_id" data-calendar-cancel-meeting-id />
           <input type="hidden" name="scope" value="mine" />
           <button class="btn btn-soft btn-inline overview-cancel-button" type="submit" onclick="return confirm('Are you sure you want to cancel this meeting?')">Cancel meeting</button>
@@ -286,6 +268,7 @@
       </div>
 
       <form method="POST" action="{{ url_for('web_calendar_meeting_update') }}" class="calendar-modal-edit-form" data-calendar-edit-form hidden>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}" />
         <input type="hidden" name="meeting_id" data-calendar-edit-meeting-id />
         <input type="hidden" name="month" value="{{ calendar_view['selected_month'] }}" />
 
@@ -348,3 +331,4 @@
   <script src="{{ url_for('static', path='calendar.js') }}"></script>
 </body>
 </html>
+

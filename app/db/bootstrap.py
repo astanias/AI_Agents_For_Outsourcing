@@ -1,7 +1,15 @@
+import re
+from pathlib import Path
+
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from app.db.session import engine
+
+
+BASE_SCHEMA_PATH = Path(__file__).resolve().parents[2] / "db" / "schema.sql"
+CREATE_INDEX_PATTERN = re.compile(r"\bCREATE INDEX\s+(?!IF NOT EXISTS\b)", re.IGNORECASE)
+CREATE_TABLE_PATTERN = re.compile(r"\bCREATE TABLE\s+(?!IF NOT EXISTS\b)", re.IGNORECASE)
 
 
 SCHEMA_PATCHES = (
@@ -137,8 +145,15 @@ SCHEMA_PATCHES = (
 BOOTSTRAP_LOCK_ID = 2147483001
 
 
+def _load_base_schema() -> str:
+    schema_sql = BASE_SCHEMA_PATH.read_text(encoding="utf-8")
+    schema_sql = CREATE_TABLE_PATTERN.sub("CREATE TABLE IF NOT EXISTS ", schema_sql)
+    return CREATE_INDEX_PATTERN.sub("CREATE INDEX IF NOT EXISTS ", schema_sql)
+
+
 def ensure_runtime_schema(db_engine: Engine = engine) -> None:
     with db_engine.begin() as conn:
         conn.execute(text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": BOOTSTRAP_LOCK_ID})
+        conn.exec_driver_sql(_load_base_schema())
         for statement in SCHEMA_PATCHES:
             conn.execute(text(statement))

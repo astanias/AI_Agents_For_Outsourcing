@@ -1,175 +1,251 @@
 document.addEventListener("DOMContentLoaded", () => {
-  initAvailabilityTimePickers();
+  initAvailabilityCalendar();
 });
 
-function initAvailabilityTimePickers() {
-  const pickerNodes = Array.from(document.querySelectorAll("[data-time-picker]"));
-  if (!pickerNodes.length) {
+function initAvailabilityCalendar() {
+  const roots = Array.from(document.querySelectorAll("[data-availability-calendar-root]"));
+  if (!roots.length) {
     return;
   }
 
-  function pad(value) {
-    return String(value).padStart(2, "0");
+  function cellKey(dayOfWeek, startMinutes) {
+    return `${dayOfWeek}:${startMinutes}`;
   }
 
-  function populateOptions(select, options, placeholder) {
-    const values = placeholder ? [["", placeholder], ...options] : options;
-    select.innerHTML = values.map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
+  function parseInitialCells(rawValue) {
+    if (!rawValue) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(rawValue);
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+      return parsed
+        .map((item) => ({
+          day_of_week: Number(item.day_of_week),
+          start_minutes: Number(item.start_minutes),
+        }))
+        .filter((item) => Number.isFinite(item.day_of_week) && Number.isFinite(item.start_minutes));
+    } catch {
+      return [];
+    }
   }
 
-  function parseTimeValue(value) {
-    const raw = String(value || "").trim();
-    if (!raw) {
-      return null;
-    }
-
-    const match = /^(\d{2}):(\d{2})/.exec(raw);
-    if (!match) {
-      return null;
-    }
-
-    const hours24 = Number.parseInt(match[1], 10);
-    const minutes = Number.parseInt(match[2], 10);
-    if (!Number.isFinite(hours24) || !Number.isFinite(minutes)) {
-      return null;
-    }
-
-    const period = hours24 >= 12 ? "PM" : "AM";
-    const hours12 = hours24 % 12 || 12;
-    return {
-      hour: String(hours12),
-      minute: pad(minutes),
-      period,
-    };
+  function serializeCells(cellSet) {
+    return JSON.stringify(
+      Array.from(cellSet)
+        .map((key) => {
+          const [dayOfWeek, startMinutes] = key.split(":").map(Number);
+          return { day_of_week: dayOfWeek, start_minutes: startMinutes };
+        })
+        .sort((left, right) => (left.day_of_week - right.day_of_week) || (left.start_minutes - right.start_minutes)),
+    );
   }
 
-  function syncNativeInput(picker) {
-    const { hourSelect, minuteSelect, periodSelect, nativeInput } = picker;
-    if (!hourSelect.value || !minuteSelect.value || !periodSelect.value) {
-      nativeInput.value = "";
+  function setsEqual(leftSet, rightSet) {
+    if (leftSet.size !== rightSet.size) {
+      return false;
+    }
+    for (const value of leftSet) {
+      if (!rightSet.has(value)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function updateSummary(root, cellCount) {
+    const summary = root.querySelector("[data-availability-summary]");
+    if (!summary) {
       return;
     }
-
-    let hours24 = Number.parseInt(hourSelect.value, 10) % 12;
-    if (periodSelect.value === "PM") {
-      hours24 += 12;
-    }
-
-    nativeInput.value = `${pad(hours24)}:${minuteSelect.value}`;
+    summary.textContent = `${cellCount} cell${cellCount === 1 ? "" : "s"} selected`;
   }
 
-  function setPickerFromValue(picker, value) {
-    const parsed = parseTimeValue(value);
-    if (!parsed) {
-      picker.hourSelect.value = "";
-      picker.minuteSelect.value = "";
-      picker.periodSelect.value = "";
-      picker.nativeInput.value = "";
+  function updateHiddenInput(root, cellSet) {
+    const hiddenInput = root.querySelector("[data-availability-selected-cells-input]");
+    if (!hiddenInput) {
       return;
     }
-
-    picker.hourSelect.value = parsed.hour;
-    picker.minuteSelect.value = parsed.minute;
-    picker.periodSelect.value = parsed.period;
-    syncNativeInput(picker);
+    hiddenInput.value = serializeCells(cellSet);
   }
 
-  const pickers = pickerNodes
-    .map((node) => {
-      const nativeWrapper = node.querySelector("[data-time-native-wrapper]");
-      const nativeInput = node.querySelector("[data-time-native]");
-      const enhanced = node.querySelector("[data-time-enhanced]");
-      const hourSelect = node.querySelector("[data-time-hour]");
-      const minuteSelect = node.querySelector("[data-time-minute]");
-      const periodSelect = node.querySelector("[data-time-period]");
+  function refreshGrid(root, cellSet) {
+    const selector = "[data-availability-cell], [data-group-meeting-slot], .group-meeting-slot";
+    const cells = Array.from(root.querySelectorAll(selector));
+    cells.forEach((cell) => {
+      const dayOfWeek = Number(cell.dataset.dayOfWeek || cell.getAttribute('data-day-of-week') || "0");
+      const startMinutes = Number(cell.dataset.startMinutes || cell.getAttribute('data-start-minutes') || "0");
+      const key = cellKey(dayOfWeek, startMinutes);
+      const isSelected = cellSet.has(key);
 
-      if (!nativeWrapper || !nativeInput || !enhanced || !hourSelect || !minuteSelect || !periodSelect) {
-        return null;
+      // support group-meeting-slot styling
+      if (cell.classList.contains('group-meeting-slot')) {
+        cell.classList.toggle('group-meeting-slot-full', isSelected);
+        cell.classList.toggle('group-meeting-slot-none', !isSelected);
       }
 
-      populateOptions(
-        hourSelect,
-        [
-          ["1", "1"],
-          ["2", "2"],
-          ["3", "3"],
-          ["4", "4"],
-          ["5", "5"],
-          ["6", "6"],
-          ["7", "7"],
-          ["8", "8"],
-          ["9", "9"],
-          ["10", "10"],
-          ["11", "11"],
-          ["12", "12"],
-        ],
-        "Hour",
-      );
-      populateOptions(
-        minuteSelect,
-        [
-          ["00", "00"],
-          ["15", "15"],
-          ["30", "30"],
-          ["45", "45"],
-        ],
-        "Min",
-      );
-      populateOptions(
-        periodSelect,
-        [
-          ["AM", "AM"],
-          ["PM", "PM"],
-        ],
-        "AM/PM",
-      );
-
-      setPickerFromValue(
-        {
-          nativeInput,
-          hourSelect,
-          minuteSelect,
-          periodSelect,
-        },
-        nativeInput.value,
-      );
-
-      nativeWrapper.classList.add("availability-native-hidden");
-      enhanced.hidden = false;
-      nativeInput.required = false;
-      hourSelect.required = true;
-      minuteSelect.required = true;
-      periodSelect.required = true;
-
-      const picker = {
-        node,
-        nativeInput,
-        hourSelect,
-        minuteSelect,
-        periodSelect,
-      };
-
-      const sync = () => syncNativeInput(picker);
-      hourSelect.addEventListener("change", sync);
-      minuteSelect.addEventListener("change", sync);
-      periodSelect.addEventListener("change", sync);
-      nativeInput.form?.addEventListener("submit", sync);
-
-      node.addEventListener("click", (event) => {
-        const target = event.target;
-        if (target instanceof HTMLSelectElement) {
-          return;
-        }
-
-        const firstEmptySelect = [hourSelect, minuteSelect, periodSelect].find((select) => !select.value);
-        (firstEmptySelect || hourSelect).focus();
-      });
-
-      return picker;
-    })
-    .filter(Boolean);
-
-  if (!pickers.length) {
-    return;
+      // support original availability button styling
+      if (cell.hasAttribute('data-availability-cell')) {
+        cell.classList.toggle('is-selected', isSelected);
+      }
+    });
+    updateSummary(root, cellSet.size);
+    updateHiddenInput(root, cellSet);
   }
+
+  function getCellFromPoint(root, clientX, clientY) {
+    const element = document.elementFromPoint(clientX, clientY);
+    if (!(element instanceof HTMLElement)) {
+      return null;
+    }
+    return element.closest("[data-availability-cell], [data-group-meeting-slot], .group-meeting-slot");
+  }
+
+  function applyRectangle(cellSet, startCell, endCell, mode) {
+    const startDay = Math.min(startCell.dayOfWeek, endCell.dayOfWeek);
+    const endDay = Math.max(startCell.dayOfWeek, endCell.dayOfWeek);
+    const startMinute = Math.min(startCell.startMinutes, endCell.startMinutes);
+    const endMinute = Math.max(startCell.startMinutes, endCell.startMinutes) + 15;
+
+    for (let dayOfWeek = startDay; dayOfWeek <= endDay; dayOfWeek += 1) {
+      for (let minuteValue = startMinute; minuteValue < endMinute; minuteValue += 15) {
+        const key = cellKey(dayOfWeek, minuteValue);
+        if (mode === "erase") {
+          cellSet.delete(key);
+        } else {
+          cellSet.add(key);
+        }
+      }
+    }
+  }
+
+  roots.forEach((root) => {
+    const grid = root.querySelector("[data-availability-grid]") || root.querySelector("[data-group-meeting-grid]") || root.querySelector('.group-meeting-grid');
+    const clearButton = root.querySelector("[data-availability-clear]");
+    const saveButton = root.querySelector("[data-availability-save]");
+    if (!grid || !clearButton || !saveButton) {
+      return;
+    }
+
+    const initialCells = parseInitialCells(root.dataset.availabilitySelectedCells || "");
+    let cellSet = new Set(initialCells.map((cell) => cellKey(cell.day_of_week, cell.start_minutes)));
+    let dragging = false;
+    let dragMode = "add";
+    let startCell = null;
+    let activePointerId = null;
+    let baseCells = new Set(cellSet);
+    let previewCells = new Set(cellSet);
+    let savedCellSet = new Set(cellSet);
+
+    function updateSaveButtonState() {
+      const hasChanges = !setsEqual(cellSet, savedCellSet);
+      saveButton.disabled = !hasChanges;
+      saveButton.textContent = hasChanges ? "Save" : "Saved";
+    }
+
+    // ensure pointer events work smoothly on touch devices
+    try {
+      grid.style.touchAction = 'none';
+    } catch (e) {}
+
+    refreshGrid(root, cellSet);
+    updateSaveButtonState();
+
+    function commitPreview(cell) {
+      if (!startCell || !cell) {
+        return;
+      }
+      const mode = dragMode;
+      applyRectangle(cellSet, startCell, cell, mode);
+      refreshGrid(root, cellSet);
+    }
+
+    function getClosestCell(el) {
+      if (!(el instanceof HTMLElement)) return null;
+      return el.closest('[data-availability-cell], [data-group-meeting-slot], .group-meeting-slot');
+    }
+
+    grid.addEventListener("pointerdown", (event) => {
+      const targetCell = getClosestCell(event.target instanceof HTMLElement ? event.target : null);
+      if (!(targetCell instanceof HTMLElement)) {
+        return;
+      }
+
+      event.preventDefault();
+      activePointerId = event.pointerId;
+      dragging = true;
+      baseCells = new Set(cellSet);
+      previewCells = new Set(baseCells);
+      startCell = {
+        dayOfWeek: Number(targetCell.dataset.dayOfWeek || targetCell.getAttribute('data-day-of-week') || "0"),
+        startMinutes: Number(targetCell.dataset.startMinutes || targetCell.getAttribute('data-start-minutes') || "0"),
+      };
+      dragMode = cellSet.has(cellKey(startCell.dayOfWeek, startCell.startMinutes)) ? "erase" : "add";
+      applyRectangle(previewCells, startCell, startCell, dragMode);
+      refreshGrid(root, previewCells);
+      grid.setPointerCapture(event.pointerId);
+    });
+
+    grid.addEventListener("pointermove", (event) => {
+      if (!dragging || event.pointerId !== activePointerId || !startCell) {
+        return;
+      }
+      const targetCell = getCellFromPoint(root, event.clientX, event.clientY) || getClosestCell(document.elementFromPoint(event.clientX, event.clientY));
+      if (!targetCell) {
+        return;
+      }
+      const currentCell = {
+        dayOfWeek: Number(targetCell.dataset.dayOfWeek || targetCell.getAttribute('data-day-of-week') || "0"),
+        startMinutes: Number(targetCell.dataset.startMinutes || targetCell.getAttribute('data-start-minutes') || "0"),
+      };
+      previewCells = new Set(baseCells);
+      applyRectangle(previewCells, startCell, currentCell, dragMode);
+      refreshGrid(root, previewCells);
+    });
+
+    function endDrag(event) {
+      if (!dragging || event.pointerId !== activePointerId) {
+        return;
+      }
+      dragging = false;
+      cellSet = new Set(previewCells);
+      startCell = null;
+      activePointerId = null;
+      grid.releasePointerCapture(event.pointerId);
+      refreshGrid(root, cellSet);
+      updateSaveButtonState();
+    }
+
+    grid.addEventListener("pointerup", endDrag);
+    grid.addEventListener("pointercancel", endDrag);
+    grid.addEventListener("lostpointercapture", () => {
+      dragging = false;
+      startCell = null;
+      activePointerId = null;
+      refreshGrid(root, cellSet);
+      updateSaveButtonState();
+    });
+
+    clearButton.addEventListener("click", () => {
+      cellSet.clear();
+      refreshGrid(root, cellSet);
+      updateSaveButtonState();
+    });
+
+    const form = root.tagName === 'FORM' ? root : root.querySelector("form");
+    form?.addEventListener("submit", (event) => {
+      if (setsEqual(cellSet, savedCellSet)) {
+        event.preventDefault();
+        updateSaveButtonState();
+        return;
+      }
+
+      updateHiddenInput(root, cellSet);
+      saveButton.disabled = true;
+      saveButton.textContent = "Saving...";
+    });
+  });
 }
